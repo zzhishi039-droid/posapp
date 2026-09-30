@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>posapp - 簡易POS＆商品管理</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Firebase SDK (v10 compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+  <!-- ヘッダー -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-10">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold shadow-md shadow-indigo-500/20">
+          <i data-lucide="shopping-bag" class="w-5 h-5"></i>
+        </div>
+        <h1 class="text-lg font-bold text-slate-800 tracking-tight">posapp</h1>
+      </div>
+
+      <!-- Googleログイン / アカウント情報 -->
+      <div id="authContainer">
+        <!-- 未ログイン時 -->
+        <button id="loginBtn" onclick="loginWithGoogle()" class="flex items-center gap-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold px-3 py-2 rounded-xl transition shadow-sm">
+          <svg class="w-4 h-4" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+          </svg>
+          Googleでログイン
+        </button>
+
+        <!-- ログイン済み時 -->
+        <div id="userProfile" class="hidden items-center gap-3">
+          <img id="userAvatar" src="" class="w-8 h-8 rounded-full border border-slate-200">
+          <span id="userName" class="text-xs font-bold text-slate-700 hidden sm:inline"></span>
+          <button onclick="logout()" title="ログアウト" class="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-slate-100 transition">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- 1. 入力フォーム（5項目） -->
+    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm h-fit">
+      <h2 class="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+        <i data-lucide="plus-circle" class="w-4 h-4 text-indigo-600"></i> 商品の登録（5項目）
+      </h2>
+
+      <form id="posForm" onsubmit="addItem(event)" class="space-y-3">
+        <!-- 項目1: 商品名 -->
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-500 mb-1">1. 商品名 *</label>
+          <input type="text" id="itemName" required placeholder="例: コーヒー" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <!-- 項目2: 単価 -->
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-500 mb-1">2. 単価 (円) *</label>
+            <input type="number" id="itemPrice" min="0" required placeholder="350" oninput="calculateSubtotal()" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+          <!-- 項目3: 数量 -->
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-500 mb-1">3. 数量 *</label>
+            <input type="number" id="itemQty" min="1" value="1" required oninput="calculateSubtotal()" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+        </div>
+
+        <!-- 項目4: カテゴリ -->
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-500 mb-1">4. カテゴリ *</label>
+          <select id="itemCategory" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="飲料">🥤 飲料</option>
+            <option value="食品">🍱 食品</option>
+            <option value="日用品">🧻 日用品</option>
+            <option value="その他">📦 その他</option>
+          </select>
+        </div>
+
+        <!-- 項目5: 備考メモ -->
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-500 mb-1">5. 備考メモ</label>
+          <input type="text" id="itemNote" placeholder="例: テイクアウト" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <!-- リアルタイム小計表示 -->
+        <div class="p-2.5 bg-indigo-50/50 rounded-xl flex justify-between items-center text-xs">
+          <span class="text-slate-500 font-medium">小計:</span>
+          <span id="previewSubtotal" class="font-bold text-indigo-600">¥0</span>
+        </div>
+
+        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs py-2.5 rounded-xl transition shadow-md shadow-indigo-500/20 flex items-center justify-center gap-1.5">
+          <i data-lucide="plus" class="w-4 h-4"></i> リストに追加する
+        </button>
+      </form>
+    </div>
+
+    <!-- 2. 合計金額サマリー & 一覧表示 -->
+    <div class="lg:col-span-2 space-y-4">
+      
+      <!-- 合計金額カード -->
+      <div class="bg-gradient-to-r from-indigo-600 to-blue-600 text-white p-5 rounded-2xl shadow-lg flex items-center justify-between">
+        <div>
+          <span class="text-xs font-medium text-indigo-100 block">合計金額 (自動計算)</span>
+          <span id="totalAmount" class="text-3xl font-extrabold tracking-tight">¥0</span>
+        </div>
+        <div class="text-right">
+          <span class="text-xs text-indigo-100 block">登録件数</span>
+          <span id="totalCount" class="text-xl font-bold">0 件</span>
+        </div>
+      </div>
+
+      <!-- データ一覧表示テーブル -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 class="text-sm font-bold text-slate-700">登録済みアイテム一覧</h3>
+          <button onclick="clearAll()" class="text-xs text-rose-500 hover:text-rose-700 font-medium flex items-center gap-1">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 全削除
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100">
+              <tr>
+                <th class="p-3">商品名 / 備考</th>
+                <th class="p-3">カテゴリ</th>
+                <th class="p-3 text-right">単価</th>
+                <th class="p-3 text-center">数量</th>
+                <th class="p-3 text-right">小計</th>
+                <th class="p-3 text-center">操作</th>
+              </tr>
+            </thead>
+            <tbody id="itemList" class="divide-y divide-slate-100 text-slate-700">
+              <!-- JSで動的生成 -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    // --- 1. Firebase設定 ---
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    let currentUser = null;
+    let items = [];
+
+    // 認証状態の監視
+    auth.onAuthStateChanged(user => {
+      currentUser = user;
+      const loginBtn = document.getElementById('loginBtn');
+      const userProfile = document.getElementById('userProfile');
+
+      if (user) {
+        loginBtn.classList.add('hidden');
+        userProfile.classList.remove('hidden');
+        userProfile.classList.add('flex');
+        document.getElementById('userName').textContent = user.displayName || 'ユーザー';
+        document.getElementById('userAvatar').src = user.photoURL || 'https://via.placeholder.com/32';
+      } else {
+        loginBtn.classList.remove('hidden');
+        userProfile.classList.add('hidden');
+        userProfile.classList.remove('flex');
+      }
+      loadItems();
+    });
+
+    function loginWithGoogle() {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider).catch(err => alert("ログインエラー: " + err.message));
+    }
+
+    function logout() {
+      auth.signOut();
+    }
+
+    // --- 2. データ保持（LocalStorage/再読み込み対応） ---
+    function getStorageKey() {
+      return currentUser ? `posapp_items_${currentUser.uid}` : 'posapp_items_guest';
+    }
+
+    function loadItems() {
+      items = JSON.parse(localStorage.getItem(getStorageKey()) || '[]');
+      render();
+    }
+
+    function saveItems() {
+      localStorage.setItem(getStorageKey(), JSON.stringify(items));
+      render();
+    }
+
+    // --- 3. 小計・合計計算 & 登録ロジック ---
+    function calculateSubtotal() {
+      const price = Number(document.getElementById('itemPrice').value) || 0;
+      const qty = Number(document.getElementById('itemQty').value) || 0;
+      document.getElementById('previewSubtotal').textContent = `¥${(price * qty).toLocaleString()}`;
+    }
+
+    function addItem(e) {
+      e.preventDefault();
+      const name = document.getElementById('itemName').value.trim();
+      const price = Number(document.getElementById('itemPrice').value);
+      const qty = Number(document.getElementById('itemQty').value);
+      const category = document.getElementById('itemCategory').value;
+      const note = document.getElementById('itemNote').value.trim();
+
+      const newItem = {
+        id: Date.now().toString(),
+        name,
+        price,
+        qty,
+        subtotal: price * qty,
+        category,
+        note
+      };
+
+      items.unshift(newItem);
+      saveItems();
+
+      document.getElementById('posForm').reset();
+      document.getElementById('itemQty').value = 1;
+      calculateSubtotal();
+    }
+
+    function deleteItem(id) {
+      items = items.filter(item => item.id !== id);
+      saveItems();
+    }
+
+    function clearAll() {
+      if (confirm("全てのアイテムを削除してもよろしいですか？")) {
+        items = [];
+        saveItems();
+      }
+    }
+
+    // --- 4. 一覧＆合計金額のレンダリング ---
+    function render() {
+      const tbody = document.getElementById('itemList');
+      
+      // 合計金額の自動計算
+      const totalAmount = items.reduce((sum, item) => sum + item.subtotal, 0);
+      document.getElementById('totalAmount').textContent = `¥${totalAmount.toLocaleString()}`;
+      document.getElementById('totalCount').textContent = `${items.length} 件`;
+
+      if (items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-slate-400">データがありません。左のフォームから追加してください。</td></tr>`;
+        lucide.createIcons();
+        return;
+      }
+
+      tbody.innerHTML = items.map(item => `
+        <tr class="hover:bg-slate-50/80 transition">
+          <td class="p-3">
+            <div class="font-bold text-slate-800">${escapeHtml(item.name)}</div>
+            ${item.note ? `<div class="text-[10px] text-slate-400">${escapeHtml(item.note)}</div>` : ''}
+          </td>
+          <td class="p-3"><span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">${escapeHtml(item.category)}</span></td>
+          <td class="p-3 text-right">¥${item.price.toLocaleString()}</td>
+          <td class="p-3 text-center font-bold">${item.qty}</td>
+          <td class="p-3 text-right font-extrabold text-indigo-600">¥${item.subtotal.toLocaleString()}</td>
+          <td class="p-3 text-center">
+            <button onclick="deleteItem('${item.id}')" class="p-1 text-slate-400 hover:text-rose-500 transition"><i data-lucide="trash" class="w-4 h-4"></i></button>
+          </td>
+        </tr>
+      `).join('');
+
+      lucide.createIcons();
+    }
+
+    function escapeHtml(str) {
+      return (str || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
+    }
+  </script>
+</body>
+</html>
